@@ -1,0 +1,19 @@
+{% load i18n ical_tags %}
+{% if feed %}
+<dl class="ical">
+  {% for event in feed %}<dt>
+    {% if 'url' in event %}<a href="{{ event.url }}">{% endif %}{% spaceless %}
+    {% if 'summary' in event %}{{ event.summary }}
+    {% else %}{% trans 'Event' %} {{ forloop.counter }}{% endif %}
+    {% endspaceless %}{% if 'url' in event %}</a>{% endif %}
+  </dt>
+  <dd><ul>
+    <li>{% event_time_long event %}</li>
+{% if 'location' in event %}    <li>{{ event.location }}</li>
+{% endif %}{% if 'description' in event %}    <li>{{ event.description }}</li>
+{% endif %}{% if 'comment' in event %}    <li>{{ event.comment }}</li>
+{% endif %}  </ul></dd>{% endfor %}
+</dl>
+{% else %}
+{% trans 'No events' %}
+{% endif %}
