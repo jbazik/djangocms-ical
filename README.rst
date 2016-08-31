@@ -11,10 +11,6 @@ Features
 
 * Per-plugin setting controls number of events shown.
 
-* Default template produces hCalendar microformated entries.
-
-* Text-plugin embeddable.
-
 Requirements
 ------------
 
