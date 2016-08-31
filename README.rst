@@ -19,7 +19,9 @@ Requirements
 ------------
 
 Requires:
+
 * Django 1.7+
+
 * Django-CMS 3.0+
 
 Installation and Configuration
