@@ -17,6 +17,9 @@ from cms.plugin_pool import plugin_pool
 
 from djangocms_ical.models import ICalModel
 
+use_tz = getattr(settings, 'USE_TZ', False)
+default_tz = timezone.get_default_timezone()
+
 
 class ICalPlugin(CMSPluginBase):
     model = ICalModel
@@ -36,9 +39,13 @@ class ICalPlugin(CMSPluginBase):
             try:
                 ics = self._get_ics(instance)
                 feed = self._parse_ics(ics, instance)
+                if not use_tz:
+                    self._fix_timezone(feed)
                 cache.set(instance.url, feed, instance.cache_time)
             except (URLError, HTTPError, ValueError):
                 feed = []
+        if use_tz:
+            self._fix_timezone(feed)
         context.update({'instance': instance, 'feed': feed})
         return context
 
@@ -62,7 +69,6 @@ class ICalPlugin(CMSPluginBase):
             sys.stderr.write(u"ERROR: invalid ics content [%s]" % instance.url)
             raise
         events = []
-        n = 0
         for comp in cal.walk():
             if comp.name == 'VEVENT':
                 events.append({k.lower(): comp.decoded(k) for k in comp.keys()})
@@ -71,10 +77,8 @@ class ICalPlugin(CMSPluginBase):
         if instance.offset == 'NONE':
             return events[:instance.count]
         else:
-            use_tz = getattr(settings, 'USE_TZ', False)
             now = timezone.now()
             if timezone.is_aware(events[0]['dtstart']) != use_tz:
-                default_tz = timezone.get_default_timezone()
                 if use_tz:
                     now = timezone.make_naive(now, default_tz)
                 else:
@@ -87,10 +91,23 @@ class ICalPlugin(CMSPluginBase):
                 if events[n]['dtstart'] >= now:
                     break
             if instance.offset == 'RECENT':
+                left = n - instance.count if n > instance.count else 0
                 return events[n-instance.count:n]
             elif instance.offset == 'ABOUT':
-                return events[n-instance.count/2:n+instance.count/2]
+                halfcnt = int(instance.count / 2)
+                left = n - halfcnt if n > halfcnt else 0
+                return events[left:n+halfcnt]
             else:
                 return events[n:n+instance.count]
+
+    def _fix_timezone(self, feed):
+        tz = timezone.get_current_timezone() if use_tz else default_tz
+        for event in feed:
+            for attr in 'dtstart', 'dtend':
+                if attr in event:
+                    if event[attr].tzinfo is None:
+                        event[attr].replace(tzinfo=default_tz)
+                    if event[attr].tzinfo != tz:
+                        event[attr] = event[attr].astimezone(tz)
 
 plugin_pool.register_plugin(ICalPlugin)

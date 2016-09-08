@@ -1,4 +1,5 @@
-import sys, datetime
+import sys, re, datetime
+import pytz
 from io import StringIO
 from mock import patch
 
@@ -33,7 +34,20 @@ class GetICS(object):
         return self.code
 
     def read(self):
-        return open(self.file, 'r').read()
+        #
+        # The plugin references the current time, so the test data
+        # is adjusted to the current time here.
+        #
+        dday = datetime.timedelta(days=1)
+        now = datetime.datetime.now(pytz.utc)
+        yesterday = (now - dday).strftime("%Y%m%d")
+        tomorrow = (now + dday).strftime("%Y%m%d")
+        plustwo = (now + dday * 2).strftime("%Y%m%d")
+        ics = open(self.file, 'r').read()
+        ics = re.sub(r'\$\(YESTERDAY\)', yesterday, ics)
+        ics = re.sub(r'\$\(TOMORROW\)', tomorrow, ics)
+        ics = re.sub(r'\$\(PLUSTWO\)', plustwo, ics)
+        return ics
 
 class PluginTests(TestCase):
     test_ics = 'djangocms_ical/tests/test.ics'
@@ -46,6 +60,7 @@ class PluginTests(TestCase):
     def create_plugin(self, file, code):
         self.urlopen_mock.return_value = GetICS(file, code)
         self.object = add_plugin(self.placeholder, ICalPlugin, 'en')
+        self.object.offset = 'NONE'
         self.object.url = file
         self.object.save()
 
@@ -81,20 +96,42 @@ class PluginTests(TestCase):
         self.assertEqual(feed[0]['duration'], datetime.timedelta(hours=2))
         self.assertListEqual(feed[0]['categories'],
                              [b'Category 1', b'Category 2'])
+        self.assertEqual(feed[0]['summary'], b'Event Number 1 Summary')
         self.assertEqual(feed[0]['location'], b'Location 1')
         self.assertEqual(feed[0]['url'], 'http://example.com/Event/1/')
 
         self.assertEqual(feed[1]['dtend'] - feed[1]['dtstart'],
                          datetime.timedelta(hours=1))
         self.assertEqual(feed[1]['categories'], b'Category 1')
+        self.assertEqual(feed[1]['summary'], b'Event Number 2 Summary')
         self.assertEqual(feed[1]['location'], b'Location 2')
         self.assertEqual(feed[1]['url'], 'http://example.com/Event/2/')
 
         self.assertEqual(feed[2]['categories'], b'Category 2')
         self.assertEqual(feed[2]['dtend'] - feed[2]['dtstart'],
-                         datetime.timedelta(days=1,hours=8))
+                         datetime.timedelta(days=1))
+        self.assertEqual(feed[2]['summary'], b'Event Number 3 Summary')
         self.assertEqual(feed[2]['location'], b'Location 2')
         self.assertEqual(feed[2]['url'], 'http://example.com/Event/3/')
+
+    def test_offset(self):
+        self.create_plugin(self.test_ics, 200)
+        self.create_context()
+        plugin = self.object.get_plugin_class_instance()
+        context = plugin.render(self.context, self.object, self.placeholder)
+        self.assertEqual(len(context['feed']), 3)
+        self.object.offset = 'RECENT'
+        context = plugin.render(self.context, self.object, self.placeholder)
+        self.assertEqual(len(context['feed']), 1)
+        self.object.offset = 'ABOUT'
+        context = plugin.render(self.context, self.object, self.placeholder)
+        self.assertEqual(len(context['feed']), 3)
+        self.object.offset = 'TODAY'
+        context = plugin.render(self.context, self.object, self.placeholder)
+        self.assertEqual(len(context['feed']), 2)
+        self.object.offset = 'NOW'
+        context = plugin.render(self.context, self.object, self.placeholder)
+        self.assertEqual(len(context['feed']), 2)
 
     def test_not_found(self):
         self.create_plugin(self.test_ics, 404)
