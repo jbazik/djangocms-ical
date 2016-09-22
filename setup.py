@@ -29,6 +29,6 @@ setup (
         'Operating System :: OS Independent',
         'Programming Language :: Python',
         'Topic :: Utilities',
-        'License :: OSI Approved :: GPL2 License',
+        'License :: OSI Approved :: BSD License',
     ],
 )
