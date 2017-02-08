@@ -91,41 +91,45 @@ class PluginTests(TestCase):
         self.assertEqual(context['instance'].id, self.object.id)
         self.assertIn('feed', context)
         feed = context['feed']
-        self.assertEqual(len(feed), 3)
+        self.assertEqual(len(feed), 4)
 
-        self.assertEqual(feed[0]['duration'], datetime.timedelta(hours=2))
-        self.assertListEqual(feed[0]['categories'],
+        self.assertRaises(KeyError, lambda: feed[0]['duration'])
+        self.assertEqual(feed[0]['summary'], b'Event Number 4 Summary')
+        self.assertEqual(feed[0]['uid'], 'fakeuid@google.com')
+
+        self.assertEqual(feed[1]['duration'], datetime.timedelta(hours=2))
+        self.assertListEqual(feed[1]['categories'],
                              [b'Category 1', b'Category 2'])
-        self.assertEqual(feed[0]['summary'], b'Event Number 1 Summary')
-        self.assertEqual(feed[0]['location'], b'Location 1')
-        self.assertEqual(feed[0]['url'], 'http://example.com/Event/1/')
+        self.assertEqual(feed[1]['summary'], b'Event Number 1 Summary')
+        self.assertEqual(feed[1]['location'], b'Location 1')
+        self.assertEqual(feed[1]['url'], 'http://example.com/Event/1/')
 
-        self.assertEqual(feed[1]['dtend'] - feed[1]['dtstart'],
-                         datetime.timedelta(hours=1))
-        self.assertEqual(feed[1]['categories'], b'Category 1')
-        self.assertEqual(feed[1]['summary'], b'Event Number 2 Summary')
-        self.assertEqual(feed[1]['location'], b'Location 2')
-        self.assertEqual(feed[1]['url'], 'http://example.com/Event/2/')
-
-        self.assertEqual(feed[2]['categories'], b'Category 2')
         self.assertEqual(feed[2]['dtend'] - feed[2]['dtstart'],
-                         datetime.timedelta(days=1))
-        self.assertEqual(feed[2]['summary'], b'Event Number 3 Summary')
+                         datetime.timedelta(hours=1))
+        self.assertEqual(feed[2]['categories'], b'Category 1')
+        self.assertEqual(feed[2]['summary'], b'Event Number 2 Summary')
         self.assertEqual(feed[2]['location'], b'Location 2')
-        self.assertEqual(feed[2]['url'], 'http://example.com/Event/3/')
+        self.assertEqual(feed[2]['url'], 'http://example.com/Event/2/')
+
+        self.assertEqual(feed[3]['categories'], b'Category 2')
+        self.assertEqual(feed[3]['dtend'] - feed[3]['dtstart'],
+                         datetime.timedelta(days=1))
+        self.assertEqual(feed[3]['summary'], b'Event Number 3 Summary')
+        self.assertEqual(feed[3]['location'], b'Location 2')
+        self.assertEqual(feed[3]['url'], 'http://example.com/Event/3/')
 
     def test_offset(self):
         self.create_plugin(self.test_ics, 200)
         self.create_context()
         plugin = self.object.get_plugin_class_instance()
         context = plugin.render(self.context, self.object, self.placeholder)
-        self.assertEqual(len(context['feed']), 3)
+        self.assertEqual(len(context['feed']), 4)
         self.object.offset = 'RECENT'
         context = plugin.render(self.context, self.object, self.placeholder)
         self.assertEqual(len(context['feed']), 1)
         self.object.offset = 'ABOUT'
         context = plugin.render(self.context, self.object, self.placeholder)
-        self.assertEqual(len(context['feed']), 3)
+        self.assertEqual(len(context['feed']), 4)
         self.object.offset = 'TODAY'
         context = plugin.render(self.context, self.object, self.placeholder)
         self.assertEqual(len(context['feed']), 2)

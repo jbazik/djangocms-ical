@@ -1,4 +1,4 @@
-import sys
+import sys, datetime
 try:
     from urllib.request import urlopen, Request
     from urllib.error import URLError, HTTPError
@@ -71,24 +71,31 @@ class ICalPlugin(CMSPluginBase):
         events = []
         for comp in cal.walk():
             if comp.name == 'VEVENT':
-                events.append({k.lower(): comp.decoded(k) for k in comp.keys()})
-        events.sort(key=lambda e: e['dtstart'])
+                event = {k.lower(): comp.decoded(k) for k in comp.keys()}
+                #
+                # use timezone aware datetimes for sorting
+                #
+                if isinstance(event['dtstart'], datetime.datetime):
+                    event['_time'] = event['dtstart']
+                elif isinstance(event['dtstart'], datetime.date):
+                    event['_time'] = datetime.datetime.combine(event['dtstart'],
+                                                       datetime.time.min)
+                if timezone.is_naive(event['_time']):
+                    event['_time'] = timezone.make_aware(event['_time'],
+                                                         default_tz)
+                events.append(event)
+        events.sort(key=lambda e: e['_time'])
 
         if instance.offset == 'NONE':
             return events[:instance.count]
         else:
-            now = timezone.now()
-            if timezone.is_aware(events[0]['dtstart']) != use_tz:
-                if use_tz:
-                    now = timezone.make_naive(now, default_tz)
-                else:
-                    now = timezone.make_aware(now, default_tz)
+            now = timezone.make_aware(timezone.now())
             if instance.offset == 'TODAY':
                 # backup to midnight
                 now.replace(hour=0, minute=0, second=0, microsecond=0)
             # find the next event
             for n in range(len(events)):
-                if events[n]['dtstart'] >= now:
+                if events[n]['_time'] >= now:
                     break
             if instance.offset == 'RECENT':
                 left = n - instance.count if n > instance.count else 0
@@ -104,7 +111,7 @@ class ICalPlugin(CMSPluginBase):
         tz = timezone.get_current_timezone() if use_tz else default_tz
         for event in feed:
             for attr in 'dtstart', 'dtend':
-                if attr in event:
+                if attr in event and hasattr(event[attr], 'tzinfo'):
                     if event[attr].tzinfo is None:
                         event[attr].replace(tzinfo=default_tz)
                     if event[attr].tzinfo != tz:
