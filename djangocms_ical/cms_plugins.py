@@ -84,6 +84,9 @@ class ICalPlugin(CMSPluginBase):
                     event['_time'] = timezone.make_aware(event['_time'],
                                                          default_tz)
                 events.append(event)
+        if not events:
+            return []
+
         events.sort(key=lambda e: e['_time'])
 
         if instance.offset == 'NONE':
