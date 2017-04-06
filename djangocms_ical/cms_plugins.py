@@ -37,36 +37,33 @@ class ICalPlugin(CMSPluginBase):
         feed = cache.get(instance.url)
         if not feed:
             try:
-                ics = self._get_ics(instance)
-                feed = self._parse_ics(ics, instance)
-                if not use_tz:
-                    self._fix_timezone(feed)
+                ics = self._get_ics(instance.url)
+                feed = self._parse_ics(ics, instance.url)
+                self._fix_timezone(feed)
                 cache.set(instance.url, feed, instance.cache_time)
             except (URLError, HTTPError, ValueError):
                 feed = []
-        if use_tz:
-            self._fix_timezone(feed)
+        feed = self._truncate_feed(feed, instance.offset, instance.count)
         context.update({'instance': instance, 'feed': feed})
         return context
 
-    def _get_ics(self, instance):
+    def _get_ics(self, url):
         try:
-            resp = urlopen(instance.url, timeout=self.timeout)
+            resp = urlopen(url, timeout=self.timeout)
         except URLError as e:
-            sys.stderr.write(u"ERROR: %s [%s]" % (e.reason, instance.url))
+            sys.stderr.write(u"ERROR: %s [%s]" % (e.reason, url))
             raise
         except HTTPError as e:
             reason = getattr(e, 'reason', e.read())
-            sys.stderr.write(u"ERROR: %d %s [%s]" % (e.code, reason,
-                                                     instance.url))
+            sys.stderr.write(u"ERROR: %d %s [%s]" % (e.code, reason, url))
             raise
         return resp.read()
 
-    def _parse_ics(self, ics, instance):
+    def _parse_ics(self, ics, url):
         try:
             cal = Calendar.from_ical(ics)
         except ValueError as e:
-            sys.stderr.write(u"ERROR: invalid ics content [%s]" % instance.url)
+            sys.stderr.write(u"ERROR: invalid ics content [%s]" % url)
             raise
         events = []
         for comp in cal.walk():
@@ -84,31 +81,31 @@ class ICalPlugin(CMSPluginBase):
                     event['_time'] = timezone.make_aware(event['_time'],
                                                          default_tz)
                 events.append(event)
-        if not events:
-            return []
+        if events:
+            events.sort(key=lambda e: e['_time'])
+        return events
 
-        events.sort(key=lambda e: e['_time'])
-
-        if instance.offset == 'NONE':
-            return events[:instance.count]
+    def _truncate_feed(self, feed, offset, count):
+        if offset == 'NONE':
+            return feed[:count]
         else:
             now = timezone.make_aware(timezone.now())
-            if instance.offset == 'TODAY':
+            if offset == 'TODAY':
                 # backup to midnight
                 now.replace(hour=0, minute=0, second=0, microsecond=0)
             # find the next event
-            for n in range(len(events)):
-                if events[n]['_time'] >= now:
+            for n in range(len(feed)):
+                if feed[n]['_time'] >= now:
                     break
-            if instance.offset == 'RECENT':
-                left = n - instance.count if n > instance.count else 0
-                return events[n-instance.count:n]
-            elif instance.offset == 'ABOUT':
-                halfcnt = int(instance.count / 2)
+            if offset == 'RECENT':
+                left = n - count if n > count else 0
+                return feed[n-count:n]
+            elif offset == 'ABOUT':
+                halfcnt = int(count / 2)
                 left = n - halfcnt if n > halfcnt else 0
-                return events[left:n+halfcnt]
+                return feed[left:n+halfcnt]
             else:
-                return events[n:n+instance.count]
+                return feed[n:n+count]
 
     def _fix_timezone(self, feed):
         tz = timezone.get_current_timezone() if use_tz else default_tz
