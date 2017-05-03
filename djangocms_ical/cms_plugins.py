@@ -94,6 +94,7 @@ class ICalPlugin(CMSPluginBase):
                 # backup to midnight
                 now.replace(hour=0, minute=0, second=0, microsecond=0)
             # find the next event
+            n = 0
             for n in range(len(feed)):
                 if feed[n]['_time'] >= now:
                     break
